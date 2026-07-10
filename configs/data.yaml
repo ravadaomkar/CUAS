@@ -1,0 +1,15 @@
+# YOLO dataset config for the CUAS Drone Detection Challenge
+# Paths are relative to this file's location when passed to ultralytics,
+# or use absolute paths.
+
+path: ../data/merged
+train: images/train
+val: images/val
+
+# Class 0 (drone) is the only class scored at evaluation time.
+# Classes 1/2 are optional clutter classes (birds, manned aircraft) — keep
+# them if you did NOT pass --drop_clutter_classes to prepare_dataset.py.
+names:
+  0: drone
+  1: bird
+  2: manned_aircraft
