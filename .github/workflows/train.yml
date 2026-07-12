@@ -1,0 +1,101 @@
+name: CUAS pipeline CI
+
+# This does NOT run full training on GitHub's shared runners — there's no
+# GPU, no Vibe Sim data, and a 150-epoch YOLO run would blow past Actions'
+# time limits. What it does do:
+#   1. Smoke-test that every script's CLI parses and imports cleanly
+#      (catches broken imports/argparse typos before they reach a real GPU box)
+#   2. Validate that configs/*.yaml and experiments/*/config.yaml parse and
+#      contain the keys train_yolo.py expects
+#   3. Run the pure-Python unit tests for utils/ (metrics math, WBF, etc.)
+#      which need no GPU and no dataset
+#
+# Actual training/tuning is meant to run on a self-hosted GPU runner or
+# manually — see the `workflow_dispatch` job below for that path.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_full_training:
+        description: "Run full training (requires a self-hosted GPU runner)"
+        type: boolean
+        default: false
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install CPU-only dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pyyaml numpy pandas pillow pytest --break-system-packages
+
+      - name: Validate YAML configs
+        run: |
+          python - << 'EOF'
+          import glob
+          import sys
+          import yaml
+
+          required_keys = {"model", "epochs", "imgsz", "batch"}
+          failed = False
+          for path in glob.glob("configs/*.yaml") + glob.glob("experiments/*/config.yaml"):
+              with open(path) as f:
+                  cfg = yaml.safe_load(f)
+              if "train_config" in path or "experiments" in path:
+                  missing = required_keys - set(cfg.keys())
+                  if missing:
+                      print(f"FAIL {path}: missing {missing}")
+                      failed = True
+                      continue
+              print(f"OK   {path}")
+          sys.exit(1 if failed else 0)
+          EOF
+
+      - name: Smoke-test script CLIs (--help only, no GPU/data needed)
+        run: |
+          for script in scripts/*.py; do
+            echo "--- $script ---"
+            python "$script" --help > /dev/null || { echo "FAILED: $script"; exit 1; }
+          done
+
+      - name: Run utils/ unit tests
+        run: pytest tests/ -v
+
+  full-training:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_full_training == 'true'
+    runs-on: self-hosted   # must be a GPU-equipped self-hosted runner; not available on ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install full dependencies
+        run: pip install -r requirements.txt --break-system-packages
+      - name: Train
+        run: |
+          python scripts/train_yolo.py \
+            --data configs/data.yaml \
+            --cfg configs/train_config.yaml \
+            --save_checkpoint --exp_notes "CI-triggered run: ${{ github.sha }}"
+      - name: Evaluate against real_reference
+        run: |
+          python scripts/evaluate.py \
+            --weights checkpoints/best.pt \
+            --data_dir data/real_reference \
+            --out results/predictions --plots results/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: training-results-${{ github.sha }}
+          path: |
+            checkpoints/best.pt
+            results/
+            experiments/
