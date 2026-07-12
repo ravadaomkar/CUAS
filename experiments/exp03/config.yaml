@@ -1,0 +1,25 @@
+# exp03 — stronger augmentation / medium backbone
+# Hypothesis: with only sim-generated data, overfitting to sim artifacts
+# (not real-world texture/noise) is the bigger risk than underfitting.
+# Push augmentation harder and move to yolov8m for more capacity.
+model: yolov8m.pt      # up from yolov8s
+epochs: 180
+imgsz: 960
+batch: 12
+patience: 30
+optimizer: auto
+lr0: 0.008
+mosaic: 1.0
+copy_paste: 0.5           # up from 0.3
+scale: 0.6                # up from 0.5
+translate: 0.15
+fliplr: 0.5
+flipud: 0.1               # small vertical flip prob, was 0.0 (helps aerial angle diversity)
+hsv_h: 0.02
+hsv_s: 0.8
+hsv_v: 0.5
+mixup: 0.15                # new: not used in exp01/exp02
+close_mosaic: 20
+device: 0
+project: runs/detect
+name: cuas_train_exp03

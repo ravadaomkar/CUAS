@@ -1,0 +1,24 @@
+# exp02 — larger input resolution
+# Hypothesis: drones at range occupy very few pixels (low PoT). Bumping
+# imgsz further than the exp01 baseline should improve small-object recall
+# at the cost of slower training/inference.
+model: yolov8s.pt
+epochs: 150
+imgsz: 1280          # up from 960 in exp01
+batch: 8               # reduced to fit the larger tensors in memory
+patience: 25
+optimizer: auto
+lr0: 0.01
+mosaic: 1.0
+copy_paste: 0.3
+scale: 0.5
+translate: 0.1
+fliplr: 0.5
+flipud: 0.0
+hsv_h: 0.015
+hsv_s: 0.7
+hsv_v: 0.4
+close_mosaic: 15
+device: 0
+project: runs/detect
+name: cuas_train_exp02
